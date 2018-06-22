@@ -32,7 +32,7 @@ import (
 func Delete(w http.ResponseWriter, r *http.Request) {
 	inf, userErr, sysErr, errCode := api.NewInfo(r, []string{"dsid", "userid"}, []string{"dsid", "userid"})
 	if userErr != nil || sysErr != nil {
-		api.HandleErr(w, r, errCode, userErr, sysErr)
+		api.HandleErr(w, r, nil, errCode, userErr, sysErr)
 		return
 	}
 	defer inf.Close()
@@ -42,20 +42,19 @@ func Delete(w http.ResponseWriter, r *http.Request) {
 
 	userErr, sysErr, errCode = tenant.CheckID(inf.Tx.Tx, inf.User, dsID)
 	if userErr != nil || sysErr != nil {
-		api.HandleErr(w, r, errCode, userErr, sysErr)
+		api.HandleErr(w, r, nil, errCode, userErr, sysErr)
 		return
 	}
 
 	ok, err := deleteDSUser(inf.Tx.Tx, dsID, userID)
 	if err != nil {
-		api.HandleErr(w, r, http.StatusInternalServerError, nil, errors.New("deleting delivery service user: "+err.Error()))
+		api.HandleErr(w, r, nil, http.StatusInternalServerError, nil, errors.New("deleting delivery service user: "+err.Error()))
 		return
 	}
 	if !ok {
-		api.HandleErr(w, r, http.StatusNotFound, nil, nil)
+		api.HandleErr(w, r, nil, http.StatusNotFound, nil, nil)
 		return
 	}
-	*inf.CommitTx = true
 	api.WriteRespAlert(w, r, tc.SuccessLevel, "User unlinked from delivery service.")
 }
 
