@@ -676,3 +676,29 @@ func AddUserToReq(r *http.Request, u auth.CurrentUser) {
 	ctx = context.WithValue(ctx, auth.CurrentUserKey, u)
 	*r = *r.WithContext(ctx)
 }
+
+// WriteCRUDerErrs is an adapter for http.HandlerFunc handlers to succinctly write the []error and ErrorType returned by "CRUDer" interface funcs.
+// Example:
+//  dses, errs, errType := readGetDeliveryServicesTx(inf.Params, inf.Tx, *inf.User)
+//  if len(errs) > 0 {
+//    api.WriteCRUDerErrs(errs, errType)
+//    return
+//  }
+//
+func WriteCRUDerErrs(w http.ResponseWriter, r *http.Request, errs []error, errType tc.ApiErrorType) {
+	errStr := util.JoinErrsStr(errs)
+	switch errType {
+	case tc.NoError:
+		handleSimpleErr(w, r, http.StatusInternalServerError, nil, fmt.Errorf("readGetDeliveryServicesTx returned no error, but errs: "+errStr, errType))
+	case tc.SystemError:
+		handleSimpleErr(w, r, http.StatusInternalServerError, nil, errors.New("system error: "+errStr))
+	case tc.DataConflictError:
+		handleSimpleErr(w, r, http.StatusBadRequest, errors.New("data conflict: "+errStr), nil)
+	case tc.DataMissingError:
+		handleSimpleErr(w, r, http.StatusBadRequest, errors.New("data missing: "+errStr), nil)
+	case tc.ForbiddenError:
+		handleSimpleErr(w, r, http.StatusForbidden, nil, nil)
+	default:
+		handleSimpleErr(w, r, http.StatusInternalServerError, nil, fmt.Errorf("readGetDeliveryServicesTx returned unknown error type %T err: "+errStr, errType))
+	}
+}
