@@ -20,24 +20,14 @@ package dsuser
  */
 
 import (
-	"database/sql"
-	"errors"
-	"net/http"
+	"context"
+	"regexp"
 	"testing"
 
-	"github.com/apache/trafficcontrol/lib/go-tc"
-	"github.com/apache/trafficcontrol/traffic_ops/traffic_ops_golang/api"
-	"github.com/apache/trafficcontrol/traffic_ops/traffic_ops_golang/tenant"
+	"github.com/jmoiron/sqlx"
+
+	sqlmock "gopkg.in/DATA-DOG/go-sqlmock.v1"
 )
-
-func getTestDSUser() []tc.DeliveryServiceNullable {
-	dsinfo := []tc.DeliveryServiceNullable{}
-	testDSInfo := tc.DeliveryServiceNullable{}
-
-	dsinfo = append(dsinfo, testDSInfo)
-
-	return dsinfo
-}
 
 func TestDelete(t *testing.T) {
 	mockDB, mock, err := sqlmock.New()
@@ -46,16 +36,29 @@ func TestDelete(t *testing.T) {
 	}
 	defer mockDB.Close()
 
-	// db := sql.Open(mockDB, "sqlmock")
-	// defer db.Close()
+	db := sqlx.NewDb(mockDB, "sqlmock")
+	defer db.Close()
 
 	mock.ExpectBegin()
-	testDSs := getTestDSUser()
-	rows := sqlmock.NewRows([]string{"deliveryservice", "tm_user_id"}).AddRow(1, 2)
 
 	mock.ExpectQuery(regexp.QuoteMeta(`DELETE FROM deliveryservice_tmuser WHERE deliveryservice = $1 AND tm_user_id = $2 RETURNING tm_user_id`)).WithArgs(1, 2).
-		WillReturnResult(sqlmock.NewRows([]string{"tm_user_id"}).AddRow(2))
+		WillReturnRows(sqlmock.NewRows([]string{"tm_user_id"}).AddRow(2))
 
 	mock.ExpectCommit()
+
+	dbCtx := context.TODO()
+	tx, err := db.BeginTxx(dbCtx, nil)
+	if err != nil {
+		t.Fatalf("creating transaction: %v", err)
+	}
+	defer tx.Commit()
+
+	didDelete, err := deleteDSUser(tx.Tx, 1, 2)
+	if err != nil || didDelete != true {
+		t.Errorf("deleteDSUser expected: true - error nil, actual: %t - %v", didDelete, err)
+	}
+	if err = db.Close(); err != nil {
+		t.Errorf("Error '%s' was not expected while closing the database", err)
+	}
 
 }
